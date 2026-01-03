@@ -126,6 +126,16 @@ export interface PaymentHistoryItem {
   payment_method: string | null;
 }
 
+export interface PendingPayment {
+  charge_id: string;
+  reference_id: string;
+  amount_thb: number;
+  pages_to_receive: number;
+  qr_code: string;
+  qr_expiry: string | null;
+  created_at: string;
+}
+
 export async function getPaymentPackages(
   accessToken: string
 ): Promise<{ data: PaymentPackage[] | null; error: string | null }> {
@@ -200,6 +210,30 @@ export async function getPaymentHistory(
     return { data: result, error: null };
   } catch (error) {
     console.error("Failed to fetch payment history:", error);
+    return { data: null, error: "Failed to connect to server" };
+  }
+}
+
+export async function getPendingPayment(
+  accessToken: string
+): Promise<{ data: PendingPayment | null; error: string | null }> {
+  try {
+    const response = await fetch(`${API_URL}/payment/pending`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return { data: null, error: `Error: ${response.status}` };
+    }
+
+    const result = await response.json();
+    return { data: result, error: null };
+  } catch (error) {
+    console.error("Failed to fetch pending payment:", error);
     return { data: null, error: "Failed to connect to server" };
   }
 }

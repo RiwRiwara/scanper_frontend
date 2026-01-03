@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { type PaymentPackage, createCharge } from "../lib/api";
+import { useState, useEffect } from "react";
+import { type PaymentPackage, type PendingPayment, createCharge, getPendingPayment } from "../lib/api";
 import { getAccessToken } from "../lib/liff";
 
 interface PaymentModalProps {
@@ -23,8 +23,58 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [chargeId, setChargeId] = useState<string | null>(null);
   const [pendingPages, setPendingPages] = useState<number>(0);
+  const [qrExpiry, setQrExpiry] = useState<string | null>(null);
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+
+  // Check for pending payment when modal opens
+  useEffect(() => {
+    if (isOpen && !qrCode) {
+      checkPendingPayment();
+    }
+  }, [isOpen]);
+
+  const checkPendingPayment = async () => {
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+
+    setIsLoadingPending(true);
+    const { data } = await getPendingPayment(accessToken);
+    setIsLoadingPending(false);
+
+    if (data && data.qr_code) {
+      // Check if QR is not expired
+      if (data.qr_expiry) {
+        const expiry = new Date(data.qr_expiry);
+        if (expiry > new Date()) {
+          setQrCode(data.qr_code);
+          setChargeId(data.charge_id);
+          setPendingPages(data.pages_to_receive);
+          setQrExpiry(data.qr_expiry);
+        }
+      } else {
+        setQrCode(data.qr_code);
+        setChargeId(data.charge_id);
+        setPendingPages(data.pages_to_receive);
+      }
+    }
+  };
 
   if (!isOpen) return null;
+
+  // Show loading when checking for pending payment
+  if (isLoadingPending) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div className="relative bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-xl">
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 border-3 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <p className="mt-4 text-slate-600 dark:text-slate-300">Checking pending payment...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const getCustomPages = () => {
     const amount = parseInt(customAmount) || 0;
@@ -107,12 +157,14 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
     setQrCode(null);
     setChargeId(null);
     setPendingPages(0);
+    setQrExpiry(null);
   };
 
   const handlePaymentComplete = () => {
     setQrCode(null);
     setChargeId(null);
     setPendingPages(0);
+    setQrExpiry(null);
     onSuccess();
     onClose();
   };
@@ -120,6 +172,15 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
   const effectiveAmount = getEffectiveAmount();
   const effectivePages = getEffectivePages();
   const isValid = effectiveAmount >= MIN_AMOUNT;
+
+  // Calculate remaining time for QR
+  const getQrRemainingTime = () => {
+    if (!qrExpiry) return "15 minutes";
+    const expiry = new Date(qrExpiry);
+    const now = new Date();
+    const diff = Math.max(0, Math.floor((expiry.getTime() - now.getTime()) / 1000 / 60));
+    return `${diff} minutes`;
+  };
 
   // Show QR code view if payment is pending
   if (qrCode) {
@@ -159,20 +220,26 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Scan with your banking app
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-              QR expires in 15 minutes
+            <p className="text-xs text-orange-500 dark:text-orange-400 mt-2">
+              ⏱️ Expires in {getQrRemainingTime()}
             </p>
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
             <button
               onClick={handlePaymentComplete}
               className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-colors"
             >
               I've completed payment
             </button>
-            <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
+            <button
+              onClick={handleQrClose}
+              className="w-full py-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-sm transition-colors"
+            >
+              Create new payment instead
+            </button>
+            <p className="text-xs text-center text-slate-400 dark:text-slate-500">
               Your pages will be added automatically after payment
             </p>
           </div>
