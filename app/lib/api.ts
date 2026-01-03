@@ -202,3 +202,54 @@ export async function getPaymentHistory(
     return { data: null, error: "Failed to connect to server" };
   }
 }
+
+// ============ OCR Message API ============
+
+export interface OcrMessageContent {
+  id: string;
+  message_type: string;
+  content: string;
+  timestamp: string;
+  metadata: {
+    image_size?: number;
+    file_name?: string;
+    file_size?: number;
+    pages_processed?: number;
+    processing_time?: number;
+    line_message_id?: string;
+  };
+}
+
+export async function getOcrMessage(
+  accessToken: string,
+  messageId: string
+): Promise<{ data: OcrMessageContent | null; error: string | null }> {
+  try {
+    const response = await fetch(`${API_URL}/liff/message/${messageId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        return { data: null, error: "Please login to view this content" };
+      }
+      if (response.status === 403) {
+        return { data: null, error: "You don't have access to this message" };
+      }
+      if (response.status === 404) {
+        return { data: null, error: "Message not found" };
+      }
+      return { data: null, error: `Error: ${response.status}` };
+    }
+
+    const result: OcrMessageContent = await response.json();
+    return { data: result, error: null };
+  } catch (error) {
+    console.error("Failed to fetch OCR message:", error);
+    return { data: null, error: "Failed to connect to server" };
+  }
+}
