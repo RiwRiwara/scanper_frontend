@@ -11,7 +11,7 @@ import {
   isInClient,
   type LiffProfile,
 } from "../lib/liff";
-import { fetchUserData, type UserData, type UserNotFound } from "../lib/api";
+import { fetchUserData, updateDisplayName as apiUpdateDisplayName, type UserData, type UserNotFound } from "../lib/api";
 
 interface LiffContextType {
   isInitialized: boolean;
@@ -22,9 +22,11 @@ interface LiffContextType {
   userNotFound: UserNotFound | null;
   error: string | null;
   isLoading: boolean;
+  isUpdating: boolean;
   login: () => void;
   logout: () => void;
   refreshUserData: () => Promise<void>;
+  updateDisplayName: (newName: string) => Promise<{ success: boolean; error: string | null }>;
 }
 
 const LiffContext = createContext<LiffContextType | null>(null);
@@ -38,6 +40,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
   const [userNotFound, setUserNotFound] = useState<UserNotFound | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const loadUserData = useCallback(async () => {
     const accessToken = getAccessToken();
@@ -90,6 +93,31 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, [loadUserData]);
 
+  const updateDisplayName = useCallback(async (newName: string): Promise<{ success: boolean; error: string | null }> => {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+      return { success: false, error: "No access token available" };
+    }
+
+    setIsUpdating(true);
+    const { data, error: updateError } = await apiUpdateDisplayName(accessToken, newName);
+    setIsUpdating(false);
+
+    if (updateError) {
+      return { success: false, error: updateError };
+    }
+
+    if (data) {
+      // Update local userData with new display name
+      if (userData) {
+        setUserData({ ...userData, display_name: data.display_name });
+      }
+      return { success: true, error: null };
+    }
+
+    return { success: false, error: "Unknown error" };
+  }, [userData]);
+
   return (
     <LiffContext.Provider
       value={{
@@ -101,9 +129,11 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         userNotFound,
         error,
         isLoading,
+        isUpdating,
         login,
         logout,
         refreshUserData,
+        updateDisplayName,
       }}
     >
       {children}

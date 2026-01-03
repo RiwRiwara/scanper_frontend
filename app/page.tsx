@@ -1,10 +1,15 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useLiff } from "./context/LiffContext";
 import LoginScreen from "./components/LoginScreen";
 import Header from "./components/Header";
 import UsageCard from "./components/UsageCard";
 import NotFoundCard from "./components/NotFoundCard";
+import PaymentModal from "./components/PaymentModal";
+import PaymentHistory from "./components/PaymentHistory";
+import { getPaymentPackages, type PaymentPackage } from "./lib/api";
+import { getAccessToken } from "./lib/liff";
 
 export default function Home() {
   const {
@@ -15,10 +20,61 @@ export default function Home() {
     userNotFound,
     error,
     isLoading,
+    isUpdating,
     login,
     logout,
     refreshUserData,
+    updateDisplayName,
   } = useLiff();
+
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [packages, setPackages] = useState<PaymentPackage[]>([]);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
+  // Check for payment completion from URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("payment") === "complete") {
+      setPaymentSuccess(true);
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+      // Refresh user data to get updated quota
+      refreshUserData();
+      // Refresh payment history
+      setHistoryRefreshKey((k) => k + 1);
+      // Hide success message after 5 seconds
+      setTimeout(() => setPaymentSuccess(false), 5000);
+    }
+  }, [refreshUserData]);
+
+  // Load payment packages when logged in
+  useEffect(() => {
+    async function loadPackages() {
+      const accessToken = getAccessToken();
+      if (accessToken) {
+        const { data } = await getPaymentPackages(accessToken);
+        if (data) {
+          setPackages(data);
+        }
+      }
+    }
+
+    if (isLoggedIn) {
+      loadPackages();
+    }
+  }, [isLoggedIn]);
+
+  const handleBuyMore = () => {
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setPaymentSuccess(true);
+    refreshUserData();
+    setHistoryRefreshKey((k) => k + 1);
+    setTimeout(() => setPaymentSuccess(false), 5000);
+  };
 
   // Loading state
   if (!isInitialized || isLoading) {
@@ -67,9 +123,34 @@ export default function Home() {
   // Logged in - show dashboard
   return (
     <div className="min-h-screen pb-6">
-      <Header profile={profile} onLogout={logout} />
+      <Header
+        profile={profile}
+        userData={userData}
+        onLogout={logout}
+        onUpdateDisplayName={updateDisplayName}
+        isUpdating={isUpdating}
+      />
 
       <main className="max-w-md mx-auto px-4 py-6">
+        {/* Payment success banner */}
+        {paymentSuccess && (
+          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl p-4 mb-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-green-700 dark:text-green-300 font-medium">
+                Payment Successful!
+              </p>
+              <p className="text-green-600 dark:text-green-400 text-sm">
+                Your pages have been added to your account.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Error banner */}
         {error && (
           <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 mb-4">
@@ -86,7 +167,15 @@ export default function Home() {
         )}
 
         {/* User data */}
-        {userData && <UsageCard userData={userData} />}
+        {userData && (
+          <>
+            <UsageCard userData={userData} onBuyMore={handleBuyMore} />
+            {/* Payment History */}
+            <div className="mt-4">
+              <PaymentHistory refreshTrigger={historyRefreshKey} />
+            </div>
+          </>
+        )}
 
         {/* User not found */}
         {userNotFound && <NotFoundCard userNotFound={userNotFound} />}
@@ -100,6 +189,14 @@ export default function Home() {
           {isLoading ? "Refreshing..." : "Refresh Data"}
         </button>
       </main>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onSuccess={handlePaymentSuccess}
+        packages={packages}
+      />
     </div>
   );
 }
