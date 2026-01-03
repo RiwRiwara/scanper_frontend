@@ -20,6 +20,9 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
   const [useCustomAmount, setUseCustomAmount] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [chargeId, setChargeId] = useState<string | null>(null);
+  const [pendingPages, setPendingPages] = useState<number>(0);
 
   if (!isOpen) return null;
 
@@ -84,6 +87,12 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
     if (data) {
       if (data.action_required === "REDIRECT" && data.redirect_url) {
         window.location.href = data.redirect_url;
+      } else if (data.action_required === "ENCODED_IMAGE" && data.qr_code) {
+        // Show QR code for PromptPay
+        setQrCode(data.qr_code);
+        setChargeId(data.charge_id);
+        setPendingPages(data.pages_to_receive);
+        setIsProcessing(false);
       } else if (data.action_required === "NONE") {
         onSuccess();
         onClose();
@@ -94,9 +103,90 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, packages }: P
     }
   };
 
+  const handleQrClose = () => {
+    setQrCode(null);
+    setChargeId(null);
+    setPendingPages(0);
+  };
+
+  const handlePaymentComplete = () => {
+    setQrCode(null);
+    setChargeId(null);
+    setPendingPages(0);
+    onSuccess();
+    onClose();
+  };
+
   const effectiveAmount = getEffectiveAmount();
   const effectivePages = getEffectivePages();
   const isValid = effectiveAmount >= MIN_AMOUNT;
+
+  // Show QR code view if payment is pending
+  if (qrCode) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div className="relative bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md overflow-hidden shadow-xl animate-slide-up">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white">
+                Scan QR to Pay
+              </h2>
+              <button
+                onClick={handleQrClose}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* QR Code */}
+          <div className="p-6 flex flex-col items-center">
+            <div className="bg-white p-4 rounded-xl shadow-lg">
+              <img
+                src={`data:image/png;base64,${qrCode}`}
+                alt="PromptPay QR Code"
+                className="w-64 h-64"
+              />
+            </div>
+            <p className="mt-4 text-lg font-bold text-green-600 dark:text-green-400">
+              {pendingPages.toLocaleString()} pages
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Scan with your banking app
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+              QR expires in 15 minutes
+            </p>
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+            <button
+              onClick={handlePaymentComplete}
+              className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-colors"
+            >
+              I've completed payment
+            </button>
+            <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
+              Your pages will be added automatically after payment
+            </p>
+          </div>
+        </div>
+        <style jsx>{`
+          @keyframes slide-up {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+          .animate-slide-up { animation: slide-up 0.3s ease-out; }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">

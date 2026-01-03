@@ -114,6 +114,7 @@ export interface CreateChargeResponse {
   pages_to_receive: number;
   action_required: "NONE" | "REDIRECT" | "ENCODED_IMAGE";
   redirect_url: string | null;
+  qr_code: string | null;
 }
 
 export interface PaymentHistoryItem {
