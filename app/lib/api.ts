@@ -12,6 +12,75 @@ export interface UserData {
   last_seen_at: string;
 }
 
+// ============ Free Claim API ============
+
+export interface FreeClaimStatus {
+  can_claim: boolean;
+  pages_available: number;
+  last_claimed: string | null;
+  next_claim_at: string | null;
+}
+
+export interface ClaimFreeResponse {
+  success: boolean;
+  pages_claimed: number;
+  new_limit: number;
+  message: string;
+  can_claim_again_at: string | null;
+}
+
+export async function getFreeClaimStatus(
+  accessToken: string
+): Promise<{ data: FreeClaimStatus | null; error: string | null }> {
+  try {
+    const response = await fetch(`${API_URL}/liff/free-claim/status`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return { data: null, error: `Error: ${response.status}` };
+    }
+
+    const result: FreeClaimStatus = await response.json();
+    return { data: result, error: null };
+  } catch (error) {
+    console.error("Failed to fetch free claim status:", error);
+    return { data: null, error: "Failed to connect to server" };
+  }
+}
+
+export async function claimFreePages(
+  accessToken: string
+): Promise<{ data: ClaimFreeResponse | null; error: string | null }> {
+  try {
+    const response = await fetch(`${API_URL}/liff/free-claim`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 400) {
+        const errorData = await response.json();
+        return { data: null, error: errorData.detail || "Already claimed today" };
+      }
+      return { data: null, error: `Error: ${response.status}` };
+    }
+
+    const result: ClaimFreeResponse = await response.json();
+    return { data: result, error: null };
+  } catch (error) {
+    console.error("Failed to claim free pages:", error);
+    return { data: null, error: "Failed to connect to server" };
+  }
+}
+
 export interface UserNotFound {
   message: string;
   line_user_id: string;

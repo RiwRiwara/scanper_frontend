@@ -8,6 +8,7 @@ import UsageCard from "./components/UsageCard";
 import NotFoundCard from "./components/NotFoundCard";
 import PaymentModal from "./components/PaymentModal";
 import PaymentHistory from "./components/PaymentHistory";
+import FreeClaimCard from "./components/FreeClaimCard";
 import { getPaymentPackages, type PaymentPackage } from "./lib/api";
 import { getAccessToken } from "./lib/liff";
 
@@ -165,6 +166,11 @@ export default function Home() {
             </button>
           </div>
         )}
+
+        {/* Free Claim Card */}
+        <div className="mb-4">
+          <FreeClaimCard onClaimed={refreshUserData} />
+        </div>
 
         {/* User data */}
         {userData && (
